@@ -503,6 +503,17 @@ export type ToolsConfig = {
       userAgent?: string;
       /** Use Readability to extract main content (default: true). */
       readability?: boolean;
+      /** Override SSRF policy for web fetch in trusted egress setups. */
+      ssrfPolicy?: {
+        /** Legacy alias for dangerouslyAllowPrivateNetwork. */
+        allowPrivateNetwork?: boolean;
+        /** Allow private/internal resolved addresses for approved fetches. */
+        dangerouslyAllowPrivateNetwork?: boolean;
+        /** Exact host exceptions for private-network resolution checks. */
+        allowedHostnames?: string[];
+        /** Hostname allowlist patterns used by the SSRF guard. */
+        hostnameAllowlist?: string[];
+      };
       firecrawl?: {
         /** Enable Firecrawl fallback (default: true when apiKey is set). */
         enabled?: boolean;
