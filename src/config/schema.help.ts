@@ -664,7 +664,7 @@ export const FIELD_HELP: Record<string, string> = {
   "tools.web.search.kimi.apiKey":
     "Moonshot/Kimi API key (fallback: KIMI_API_KEY or MOONSHOT_API_KEY env var).",
   "tools.web.search.kimi.baseUrl":
-    'Kimi base URL override (default: "https://api.moonshot.ai/v1").',
+    'Kimi base URL override (default: "https://api.moonshot.ai/v1"). Use a .cn base URL with China-platform keys and a .ai base URL with global-platform keys; Moonshot keys are platform-bound.',
   "tools.web.search.kimi.model": 'Kimi model override (default: "moonshot-v1-128k").',
   "tools.web.search.perplexity.apiKey":
     "Perplexity or OpenRouter API key (fallback: PERPLEXITY_API_KEY or OPENROUTER_API_KEY env var). Direct Perplexity keys default to the Search API; OpenRouter keys use Sonar chat completions.",
