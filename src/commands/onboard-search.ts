@@ -11,6 +11,7 @@ import type { WizardPrompter } from "../wizard/prompts.js";
 import type { SecretInputMode } from "./onboard-types.js";
 
 export type SearchProvider = "perplexity" | "brave" | "gemini" | "grok" | "kimi";
+export type KimiPlatform = "ai" | "cn";
 
 type SearchProviderEntry = {
   value: SearchProvider;
@@ -20,6 +21,28 @@ type SearchProviderEntry = {
   placeholder: string;
   signupUrl: string;
 };
+
+const KIMI_BASE_URL_BY_PLATFORM: Record<KimiPlatform, string> = {
+  ai: "https://api.moonshot.ai/v1",
+  cn: "https://api.moonshot.cn/v1",
+};
+
+export const KIMI_PLATFORM_OPTIONS: ReadonlyArray<{
+  value: KimiPlatform;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "ai",
+    label: "Moonshot Global (.ai)",
+    hint: "Use for global platform API keys",
+  },
+  {
+    value: "cn",
+    label: "Moonshot China (.cn)",
+    hint: "Use for China platform API keys",
+  },
+] as const;
 
 export const SEARCH_PROVIDER_OPTIONS: readonly SearchProviderEntry[] = [
   {
@@ -154,6 +177,38 @@ export function applySearchKey(
   };
 }
 
+export function resolveKimiPlatformFromBaseUrl(baseUrl: string | undefined): KimiPlatform {
+  if (typeof baseUrl !== "string") {
+    return "ai";
+  }
+  return baseUrl.toLowerCase().includes("moonshot.cn") ? "cn" : "ai";
+}
+
+export function resolveKimiBaseUrlForPlatform(platform: KimiPlatform): string {
+  return KIMI_BASE_URL_BY_PLATFORM[platform];
+}
+
+export function applyKimiSearchPlatform(
+  config: OpenClawConfig,
+  platform: KimiPlatform,
+): OpenClawConfig {
+  const search = { ...config.tools?.web?.search };
+  search.kimi = {
+    ...search.kimi,
+    baseUrl: resolveKimiBaseUrlForPlatform(platform),
+  };
+  return {
+    ...config,
+    tools: {
+      ...config.tools,
+      web: {
+        ...config.tools?.web,
+        search,
+      },
+    },
+  };
+}
+
 function applyProviderOnly(config: OpenClawConfig, provider: SearchProvider): OpenClawConfig {
   return {
     ...config,
@@ -243,22 +298,43 @@ export async function setupSearch(
     return config;
   }
 
+  const withKimiPlatformIfNeeded = async (base: OpenClawConfig): Promise<OpenClawConfig> => {
+    if (choice !== "kimi") {
+      return base;
+    }
+    const currentBaseUrl =
+      typeof base.tools?.web?.search?.kimi?.baseUrl === "string"
+        ? base.tools.web.search.kimi.baseUrl
+        : undefined;
+    const platform = await prompter.select<KimiPlatform>({
+      message: "Kimi platform",
+      options: KIMI_PLATFORM_OPTIONS,
+      initialValue: resolveKimiPlatformFromBaseUrl(currentBaseUrl),
+    });
+    return applyKimiSearchPlatform(base, platform);
+  };
+
+  const configWithKimiPlatform = await withKimiPlatformIfNeeded(config);
+
   const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === choice)!;
-  const existingKey = resolveExistingKey(config, choice);
-  const keyConfigured = hasExistingKey(config, choice);
+  const existingKey = resolveExistingKey(configWithKimiPlatform, choice);
+  const keyConfigured = hasExistingKey(configWithKimiPlatform, choice);
   const envAvailable = hasKeyInEnv(entry);
 
   if (opts?.quickstartDefaults && (keyConfigured || envAvailable)) {
     const result = existingKey
-      ? applySearchKey(config, choice, existingKey)
-      : applyProviderOnly(config, choice);
-    return preserveDisabledState(config, result);
+      ? applySearchKey(configWithKimiPlatform, choice, existingKey)
+      : applyProviderOnly(configWithKimiPlatform, choice);
+    return preserveDisabledState(configWithKimiPlatform, result);
   }
 
   const useSecretRefMode = opts?.secretInputMode === "ref"; // pragma: allowlist secret
   if (useSecretRefMode) {
     if (keyConfigured) {
-      return preserveDisabledState(config, applyProviderOnly(config, choice));
+      return preserveDisabledState(
+        configWithKimiPlatform,
+        applyProviderOnly(configWithKimiPlatform, choice),
+      );
     }
     const ref = buildSearchEnvRef(choice);
     await prompter.note(
@@ -270,7 +346,7 @@ export async function setupSearch(
       ].join("\n"),
       "Web search",
     );
-    return applySearchKey(config, choice, ref);
+    return applySearchKey(configWithKimiPlatform, choice, ref);
   }
 
   const keyInput = await prompter.text({
@@ -285,15 +361,21 @@ export async function setupSearch(
   const key = keyInput?.trim() ?? "";
   if (key) {
     const secretInput = resolveSearchSecretInput(choice, key, opts?.secretInputMode);
-    return applySearchKey(config, choice, secretInput);
+    return applySearchKey(configWithKimiPlatform, choice, secretInput);
   }
 
   if (existingKey) {
-    return preserveDisabledState(config, applySearchKey(config, choice, existingKey));
+    return preserveDisabledState(
+      configWithKimiPlatform,
+      applySearchKey(configWithKimiPlatform, choice, existingKey),
+    );
   }
 
   if (keyConfigured || envAvailable) {
-    return preserveDisabledState(config, applyProviderOnly(config, choice));
+    return preserveDisabledState(
+      configWithKimiPlatform,
+      applyProviderOnly(configWithKimiPlatform, choice),
+    );
   }
 
   await prompter.note(
@@ -306,13 +388,13 @@ export async function setupSearch(
   );
 
   return {
-    ...config,
+    ...configWithKimiPlatform,
     tools: {
-      ...config.tools,
+      ...configWithKimiPlatform.tools,
       web: {
-        ...config.tools?.web,
+        ...configWithKimiPlatform.tools?.web,
         search: {
-          ...config.tools?.web?.search,
+          ...configWithKimiPlatform.tools?.web?.search,
           provider: choice,
         },
       },

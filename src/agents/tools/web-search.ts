@@ -1077,7 +1077,11 @@ function resolveSiteName(url: string | undefined): string | undefined {
 async function throwWebSearchApiError(res: Response, providerLabel: string): Promise<never> {
   const detailResult = await readResponseText(res, { maxBytes: 64_000 });
   const detail = detailResult.text;
-  throw new Error(`${providerLabel} API error (${res.status}): ${detail || res.statusText}`);
+  const providerHint =
+    providerLabel === "Kimi" && res.status === 401
+      ? " Hint: Moonshot API keys are platform-bound. Ensure tools.web.search.kimi.baseUrl matches your key platform (.ai vs .cn)."
+      : "";
+  throw new Error(`${providerLabel} API error (${res.status}): ${detail || res.statusText}${providerHint}`);
 }
 
 async function runPerplexitySearchApi(params: {
