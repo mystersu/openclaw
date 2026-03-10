@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
 import { normalizeResolvedSecretInputString } from "../../config/types.secrets.js";
-import { SsrFBlockedError } from "../../infra/net/ssrf.js";
+import { SsrFBlockedError, type SsrFPolicy } from "../../infra/net/ssrf.js";
 import { logDebug } from "../../logger.js";
 import type { RuntimeWebFetchFirecrawlMetadata } from "../../secrets/runtime-web-tools.js";
 import { wrapExternalContent, wrapWebContent } from "../../security/external-content.js";
@@ -101,6 +101,18 @@ function resolveFetchReadabilityEnabled(fetch?: WebFetchConfig): boolean {
     return fetch.readability;
   }
   return true;
+}
+
+function resolveFetchSsrfPolicy(fetch?: WebFetchConfig): SsrFPolicy | undefined {
+  if (
+    !fetch ||
+    !("ssrfPolicy" in fetch) ||
+    !fetch.ssrfPolicy ||
+    typeof fetch.ssrfPolicy !== "object"
+  ) {
+    return undefined;
+  }
+  return fetch.ssrfPolicy as SsrFPolicy;
 }
 
 function resolveFetchMaxCharsCap(fetch?: WebFetchConfig): number {
@@ -452,6 +464,7 @@ type WebFetchRuntimeParams = FirecrawlRuntimeParams & {
   cacheTtlMs: number;
   userAgent: string;
   readabilityEnabled: boolean;
+  ssrfPolicy?: SsrFPolicy;
 };
 
 function toFirecrawlContentParams(
@@ -531,6 +544,7 @@ async function runWebFetch(params: WebFetchRuntimeParams): Promise<Record<string
   try {
     const result = await fetchWithWebToolsNetworkGuard({
       url: params.url,
+      policy: params.ssrfPolicy,
       maxRedirects: params.maxRedirects,
       timeoutSeconds: params.timeoutSeconds,
       init: {
@@ -741,6 +755,7 @@ export function createWebFetchTool(options?: {
     firecrawl?.timeoutSeconds ?? fetch?.timeoutSeconds,
     DEFAULT_TIMEOUT_SECONDS,
   );
+  const ssrfPolicy = resolveFetchSsrfPolicy(fetch);
   const userAgent =
     (fetch && "userAgent" in fetch && typeof fetch.userAgent === "string" && fetch.userAgent) ||
     DEFAULT_FETCH_USER_AGENT;
@@ -771,6 +786,7 @@ export function createWebFetchTool(options?: {
         cacheTtlMs: resolveCacheTtlMs(fetch?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
         userAgent,
         readabilityEnabled,
+        ssrfPolicy,
         firecrawlEnabled,
         firecrawlApiKey,
         firecrawlBaseUrl,

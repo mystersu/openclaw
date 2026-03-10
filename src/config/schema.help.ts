@@ -682,6 +682,16 @@ export const FIELD_HELP: Record<string, string> = {
   "tools.web.fetch.userAgent": "Override User-Agent header for web_fetch requests.",
   "tools.web.fetch.readability":
     "Use Readability to extract main content from HTML (fallbacks to basic HTML cleanup).",
+  "tools.web.fetch.ssrfPolicy":
+    "Server-side request forgery guardrail overrides for web_fetch. Keep defaults in production and open only explicitly approved targets.",
+  "tools.web.fetch.ssrfPolicy.allowPrivateNetwork":
+    "Legacy alias for tools.web.fetch.ssrfPolicy.dangerouslyAllowPrivateNetwork. Prefer the dangerously-named key so risk intent stays explicit.",
+  "tools.web.fetch.ssrfPolicy.dangerouslyAllowPrivateNetwork":
+    "Allows web_fetch to access private-network address ranges after DNS resolution. Use only in trusted operator-controlled egress setups.",
+  "tools.web.fetch.ssrfPolicy.allowedHostnames":
+    "Explicit host exceptions for web_fetch SSRF checks. Use exact hostnames when your network resolves approved public domains to internal addresses.",
+  "tools.web.fetch.ssrfPolicy.hostnameAllowlist":
+    "Hostname allowlist patterns for web_fetch SSRF checks. Keep the list minimal and prefer exact hosts over broad suffix patterns.",
   "tools.web.fetch.firecrawl.enabled": "Enable Firecrawl fallback for web_fetch (if configured).",
   "tools.web.fetch.firecrawl.apiKey": "Firecrawl API key (fallback: FIRECRAWL_API_KEY env var).",
   "tools.web.fetch.firecrawl.baseUrl":
