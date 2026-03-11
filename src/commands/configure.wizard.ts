@@ -171,9 +171,13 @@ async function promptWebToolsConfig(
     resolveExistingKey,
     hasExistingKey,
     applySearchKey,
+    applyKimiSearchPlatform,
+    KIMI_PLATFORM_OPTIONS,
+    resolveKimiPlatformFromBaseUrl,
     hasKeyInEnv,
   } = await import("./onboard-search.js");
   type SP = (typeof SEARCH_PROVIDER_OPTIONS)[number]["value"];
+  type KimiPlatform = "ai" | "cn";
 
   const hasKeyForProvider = (provider: string): boolean => {
     const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === provider);
@@ -238,9 +242,31 @@ async function promptWebToolsConfig(
 
     nextSearch = { ...nextSearch, provider: providerChoice };
 
+    let configForProvider = nextConfig;
+    if (providerChoice === "kimi") {
+      const currentKimiBaseUrl =
+        typeof nextConfig.tools?.web?.search?.kimi?.baseUrl === "string"
+          ? nextConfig.tools.web.search.kimi.baseUrl
+          : undefined;
+      const kimiPlatformChoice = guardCancel(
+        await select<KimiPlatform>({
+          message: "Choose Kimi platform",
+          options: KIMI_PLATFORM_OPTIONS,
+          initialValue: resolveKimiPlatformFromBaseUrl(currentKimiBaseUrl),
+        }),
+        runtime,
+      );
+      configForProvider = applyKimiSearchPlatform(nextConfig, kimiPlatformChoice);
+      nextSearch = {
+        ...configForProvider.tools?.web?.search,
+        enabled: enableSearch,
+        provider: providerChoice,
+      };
+    }
+
     const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === providerChoice)!;
-    const existingKey = resolveExistingKey(nextConfig, providerChoice as SP);
-    const keyConfigured = hasExistingKey(nextConfig, providerChoice as SP);
+    const existingKey = resolveExistingKey(configForProvider, providerChoice as SP);
+    const keyConfigured = hasExistingKey(configForProvider, providerChoice as SP);
     const envAvailable = entry.envKeys.some((k) => Boolean(process.env[k]?.trim()));
     const envVarNames = entry.envKeys.join(" / ");
 
@@ -260,10 +286,18 @@ async function promptWebToolsConfig(
     const key = String(keyInput ?? "").trim();
 
     if (key || existingKey) {
-      const applied = applySearchKey(nextConfig, providerChoice as SP, (key || existingKey)!);
+      const applied = applySearchKey(
+        configForProvider,
+        providerChoice as SP,
+        (key || existingKey)!,
+      );
       nextSearch = { ...applied.tools?.web?.search };
     } else if (keyConfigured || envAvailable) {
-      nextSearch = { ...nextSearch };
+      nextSearch = {
+        ...configForProvider.tools?.web?.search,
+        enabled: enableSearch,
+        provider: providerChoice,
+      };
     } else {
       note(
         [

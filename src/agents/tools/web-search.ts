@@ -1157,7 +1157,11 @@ function resolveSiteName(url: string | undefined): string | undefined {
 async function throwWebSearchApiError(res: Response, providerLabel: string): Promise<never> {
   const detailResult = await readResponseText(res, { maxBytes: 64_000 });
   const detail = detailResult.text;
-  throw new Error(`${providerLabel} API error (${res.status}): ${detail || res.statusText}`);
+  const providerHint =
+    providerLabel === "Kimi" && res.status === 401
+      ? " Hint: Moonshot API keys are platform-bound. Ensure tools.web.search.kimi.baseUrl matches your key platform (.ai vs .cn)."
+      : "";
+  throw new Error(`${providerLabel} API error (${res.status}): ${detail || res.statusText}${providerHint}`);
 }
 
 async function runPerplexitySearchApi(params: {
@@ -1399,14 +1403,12 @@ function extractKimiCitations(data: KimiSearchResponse): string[] {
   return [...new Set(citations)];
 }
 
-function buildKimiToolResultContent(data: KimiSearchResponse): string {
-  return JSON.stringify({
-    search_results: (data.search_results ?? []).map((entry) => ({
-      title: entry.title ?? "",
-      url: entry.url ?? "",
-      content: entry.content ?? "",
-    })),
-  });
+function buildKimiToolResultContent(toolCall?: KimiToolCall): string {
+  const rawArguments = toolCall?.function?.arguments;
+  if (typeof rawArguments === "string" && rawArguments.trim().length > 0) {
+    return rawArguments;
+  }
+  throw new Error("Kimi tool call is missing function.arguments for $web_search.");
 }
 
 async function runKimiSearch(params: {
@@ -1476,13 +1478,13 @@ async function runKimiSearch(params: {
           tool_calls: toolCalls,
         });
 
-        const toolContent = buildKimiToolResultContent(data);
         let pushedToolResult = false;
         for (const toolCall of toolCalls) {
           const toolCallId = toolCall.id?.trim();
           if (!toolCallId) {
             continue;
           }
+          const toolContent = buildKimiToolResultContent(toolCall);
           pushedToolResult = true;
           messages.push({
             role: "tool",
